@@ -23,7 +23,7 @@ from torch.optim import lr_scheduler
 from torch.autograd import Variable
 
 import torchvision
-from torchvision import datasets, transforms
+from torchvision import datasets, transforms # 다양한 이미지 변환 제공
 
 
 import numpy as np
@@ -37,9 +37,9 @@ def run(init_lr=0.1, max_steps=64e3, mode='rgb', root='/ssd/Charades_v1_rgb', tr
     # setup dataset
     train_transforms = transforms.Compose([videotransforms.RandomCrop(224),
                                            videotransforms.RandomHorizontalFlip(),
-    ])
+    ]) # 랜덤으로 뽑아내고, 랜덤좌우반전
     test_transforms = transforms.Compose([videotransforms.CenterCrop(224)])
-
+    # 중앙 224x224뽑아냄
     dataset = Dataset(train_split, 'training', root, mode, train_transforms)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=36, pin_memory=True)
 

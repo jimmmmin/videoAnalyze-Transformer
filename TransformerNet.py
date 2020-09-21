@@ -35,7 +35,7 @@ class Norm(nn.Module):
             self.alpha = nn.Parameter(torch.ones(self.size))
             self.bias = nn.Parameter(torch.zeros(self.size))
         else:
-            self.alpha = nn.Parameter(torch.ones(self.size), requires_grad=False)
+            self.alpha = nn.Parameter(torch.ones(self.size), requires_grad=False) # 학습 안되도록
             self.bias = nn.Parameter(torch.zeros(self.size), requires_grad=False)
         self.eps = eps
 
@@ -44,20 +44,21 @@ class Norm(nn.Module):
                / (x.std(dim=-1, keepdim=True) + self.eps) + self.bias
         return norm
 
-
+# https://skyjwoo.tistory.com/entry/positional-encoding%EC%9D%B4%EB%9E%80-%EB%AC%B4%EC%97%87%EC%9D%B8%EA%B0%80
 # Standard positional encoding (addition/ concat both are valid)
-class PositionalEncoder(nn.Module):
-    def __init__(self, d_model, max_seq_len=80):
+class PositionalEncoder(nn.Module): # attention layer에 들어가기 전에 입력값으로 주어질 vector안에 pe(=action의 위치 정보)를 포함시키기 위함.
+    def __init__(self, d_model, max_seq_len=80): #d_model : num_feature
         super(PositionalEncoder, self).__init__()
         self.d_model = d_model
         pe = torch.zeros(max_seq_len, d_model)
-        for pos in range(max_seq_len):
+        for pos in range(max_seq_len): # sin, cos조합으로 순서값을 표현.
             for i in range(0, d_model, 2):
                 pe[pos, i] = \
                     math.sin(pos / (10000 ** ((2 * i) / d_model)))
                 pe[pos, i + 1] = \
                     math.cos(pos / (10000 ** ((2 * (i + 1)) / d_model)))
-        pe = pe.unsqueeze(0)
+        pe = pe.unsqueeze(0) # shape : (max_seq_len, max_seq_len, d_model)
+        pe = pe.unsqueeze(0) # shape : (max_seq_len, max_seq_len, d_model)
         self.register_buffer('pe', pe)
 
     def forward(self, x):
@@ -140,20 +141,20 @@ class Tail(nn.Module):
         self.num_frames = num_frames
         self.d_model = self.num_features / 2
         self.d_k = self.d_model // self.head
-        self.bn1 = nn.BatchNorm2d(self.num_features)
+        self.bn1 = nn.BatchNorm2d(self.num_features) # computes the mean and standard deviation per channel - batch, height, and width
         self.bn2 = Norm(self.d_model, trainable=False)
 
         self.pos_embd = PositionalEncoder(self.num_features, self.num_frames)
         self.Qpr = nn.Conv2d(self.num_features, self.d_model, kernel_size=(7, 4), stride=1, padding=0, bias=False)
-
+        # input image의 채널수, convolution에 의해서 생성된 채널 수, filter크기, ..
         self.head_layers = []
         for i in range(self.head):
             self.head_layers.append(Block_head())
 
-        self.list_layers = nn.ModuleList(self.head_layers)
+        self.list_layers = nn.ModuleList(self.head_layers) # forward처리 간단하게 할수있도록 layer의 iterator만듦
         self.classifier = nn.Linear(self.d_model, num_classes)
         # resnet style initialization
-        nn.init.kaiming_normal(self.Qpr.weight, mode='fan_out')
+        nn.init.kaiming_normal(self.Qpr.weight, mode='fan_out') # 가중치 He 초기화 (fanout: random matrix로 weight하는 방법)
         nn.init.normal(self.classifier.weight, std=0.001)
         # nn.init.constant(self.classifier.bias, 0)
 
@@ -196,14 +197,13 @@ class Tail(nn.Module):
         y = self.classifier(f)
         return y, f
 
-
 # base is resnet
 # Tail is the main transormer network
 class Semi_Transformer(nn.Module):
-    def __init__(self, num_classes, seq_len):
-        super(Semi_Transformer, self).__init__()
-        resnet50 = torchvision.models.resnet50(pretrained=True)
-        self.base = nn.Sequential(*list(resnet50.children())[:-2])
+    def __init__(self, num_classes, seq_len=8):
+        super(Semi_Transformer, self).__init__() # 신경 no
+        resnet50 = torchvision.models.resnet50(pretrained=True) # pretrained : 이미 학습 완료, 최적 weight를 포함하는 모델
+        self.base = nn.Sequential(*list(resnet50.children())[:-2]) # resnet50의 자식/모델 전체의 모든 module에 대한 iterator을 차례대로 연결해서 layer 두개 빼고 base에 넣음.
         self.tail = Tail(num_classes, seq_len)
 
     def forward(self, x):
